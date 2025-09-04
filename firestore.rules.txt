@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() { return request.auth != null; }
+
+    function userDoc() { return get(/databases/$(database)/documents/usersByUid/$(request.auth.uid)); }
+    function userRole() { return userDoc().data.role; }
+    function userPseudo() { return userDoc().data.pseudo; }
+
+    function isAdmin() { return userRole() == "ADMIN"; }
+    function isTech()  { return userRole() == "TECH"; }
+    function isCert()  { return userRole() in ["CERTIFIÉ","CERTIFIE"]; }
+
+    match /usersByUid/{uid} {
+      allow read:   if isSignedIn() && (uid == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && uid == request.auth.uid;
+      allow update: if isSignedIn() && (uid == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() && isAdmin();
+    }
+
+    match /users/{pseudo} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isSignedIn() && isAdmin();
+    }
+
+    match /patients/{id} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && (isCert() || isTech() || isAdmin());
+      allow update: if isSignedIn() && (isTech() || isAdmin());
+      allow delete: if isSignedIn() && isAdmin();
+    }
+
+    match /services/{pseudo} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn() && (isAdmin() || isTech() || userPseudo() == pseudo);
+      allow delete: if isSignedIn() && isAdmin();
+    }
+
+    match /logs/{docId} {
+      allow create: if isSignedIn();
+      allow read, update, delete: if isSignedIn() && isAdmin();
+    }
+
+    match /inbox/{docId} {
+      allow read, create: if isSignedIn();
+      allow update, delete: if isSignedIn() && (isTech() || isAdmin());
+    }
+
+    match /{document=**} { allow read, write: if false; }
+  }
+}

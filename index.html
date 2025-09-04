@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Service + Comptes + Patients (Firebase)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/png" href="logo.png">
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' https://www.gstatic.com 'wasm-unsafe-eval';
+    connect-src 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firebaseinstallations.googleapis.com https://www.googleapis.com;
+    style-src 'self' 'unsafe-inline';
+    img-src 'self' data:;
+    font-src 'self' data:;
+    worker-src 'self' blob:;
+    object-src 'none';
+    base-uri 'self';
+  ">
+  <style>
+:root{--bg:#21242B; --card:#2B3039; --card-soft:#2F3540; --border:#3A404C; --text:#E8ECF3; --muted:#A6AEBB; --primary:#4F8CFF; --green:#2ECC71; --red:#E25555;}
+*{box-sizing:border-box} body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;display:flex;align-items:center;justify-content:center;padding-left:280px;padding-right:340px}
+.box{background:var(--card);padding:2rem;border-radius:14px;border:1px solid var(--border);width:min(92vw,520px);text-align:center}
+input.main,button.main{width:100%;padding:10px 12px;margin:.5rem 0;border-radius:10px;border:1px solid var(--border);background:#252A33;color:var(--text)}
+button.main{background:var(--primary);color:#fff;font-weight:700;cursor:pointer}
+#fsUnavailable{position:fixed;top:8px;right:8px;background:#ef7d13;color:#1a1d23;border:1px solid rgba(0,0,0,.2);border-radius:10px;padding:8px 12px;z-index:9999;display:none;font-weight:700}
+.site-logo{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:6;display:block}
+.site-logo img{height:32px}
+.overlay{position:fixed;inset:0 auto 0 0;width:260px;padding:14px;border-right:1px solid var(--border)}
+.player{padding:8px 10px;border-radius:10px;cursor:pointer}
+.player:hover{background:rgba(255,255,255,.06)}
+.panel-right{position:fixed;inset:0 0 0 auto;width:320px;padding:12px;border-left:1px solid var(--border)}
+.patient-row{padding:8px 10px;border-radius:10px;cursor:pointer}
+.patient-row:hover{background:rgba(255,255,255,.06)}
+.timer{margin-top:.75rem;font-weight:800;font-size:1.35rem}
+.btn{padding:12px;border-radius:10px;border:none;cursor:pointer;font-weight:700}
+.start{background:var(--green)} .end{background:var(--red);color:#fff}
+  </style>
+</head>
+<body>
+  <div id="fsUnavailable">⚠️ Firestore inaccessible</div>
+  <div class="site-logo" id="siteLogo"><img src="logo.png" alt="Logo"></div>
+
+  <aside class="overlay">
+    <h3>Joueurs</h3>
+    <div id="playersList"></div>
+  </aside>
+
+  <aside class="panel-right">
+    <h3>Patients</h3>
+    <div><input id="patientSearch" placeholder="Rechercher…"></div>
+    <div id="patientList"></div>
+  </aside>
+
+  <div class="box" id="pseudoBox">
+    <h2>Identification</h2>
+    <input class="main" id="pseudoInput" placeholder="Entrez un pseudo" required>
+    <button class="main" id="pseudoBtn">Continuer</button>
+    <div id="passwordArea" style="display:none; margin-top:.5rem;">
+      <label id="pwdLabel" for="passwordInput" style="display:block; text-align:left; font-size:.95rem; margin:.25rem 0;">Mot de passe</label>
+      <input class="main" id="passwordInput" type="password" placeholder="Mot de passe">
+      <button class="main" id="passwordBtn">Valider</button>
+      <button class="main" id="changePseudoBtn" type="button">Changer de pseudo</button>
+    </div>
+    <p id="message" class="msg"></p>
+  </div>
+
+  <div class="box" id="serviceBox" style="display:none;">
+    <h2 id="welcome"></h2>
+    <div id="timer" class="timer">0h00</div>
+    <div class="row" style="margin-top:10px;">
+      <button class="btn start" id="startBtn">🚀 Début</button>
+      <button class="btn end" id="endBtn">⏹️ Fin</button>
+    </div>
+    <button class="btn" style="margin-top:12px;" id="homeBtn">🏠 Accueil</button>
+    <p id="status" class="msg"></p>
+  </div>
+
+  <div class="box" id="adminBox" style="display:none;">
+    <h3>👑 Admin</h3>
+    <div style="overflow:auto; max-height:60vh;">
+      <table id="adminTable"><thead><tr><th>Pseudo</th><th>Rôle</th></tr></thead><tbody></tbody></table>
+    </div>
+    <button class="btn" id="adminHomeBtn">🏠 Accueil</button>
+  </div>
+
+  <div class="modal-backdrop" id="adminGateModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); align-items:center; justify-content:center;">
+    <div style="background:#2B3039;padding:16px;border-radius:12px;border:1px solid #3A404C; width:min(92vw, 420px)">
+      <h3>🔐 Accès administrateur</h3>
+      <input class="main" id="adminPwd" type="password" placeholder="Mot de passe admin">
+      <div id="adminGateMsg" class="msg" style="margin-top:.5rem;"></div>
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <button class="main" id="adminGateCancel">Annuler</button>
+        <button class="main" id="adminGateOk">Se connecter</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./app.mjs"></script>
+</body>
+</html>
