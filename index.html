@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Accueil</title>
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      font-family: Arial, sans-serif;
+      background: #f4f4f4;
+    }
+    .login-box {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      text-align: center;
+      width: 300px;
+    }
+    input {
+      width: 90%;
+      padding: 10px;
+      margin: 8px 0;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+    }
+    button {
+      padding: 10px;
+      width: 100%;
+      background: #007BFF;
+      border: none;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      border-radius: 6px;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    #message {
+      margin-top: 10px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-box">
+    <img src="Logo.png" alt="Logo" width="120"><br>
+    <h2>Connexion</h2>
+    <input type="text" id="pseudo" placeholder="Pseudo" required><br>
+    <input type="password" id="password" placeholder="Mot de passe" required><br>
+    <button id="loginBtn">Se connecter</button>
+    <div id="message"></div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
+    import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDMGMkmVgl8h0WuknCA-AChlyoX95RufNs",
+      authDomain: "base-de-donnee-b5c8c.firebaseapp.com",
+      projectId: "base-de-donnee-b5c8c",
+      storageBucket: "base-de-donnee-b5c8c.firebasestorage.app",
+      messagingSenderId: "302677536354",
+      appId: "1:302677536354:web:54e0d4562bad5f06c3ab3b"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    document.getElementById("loginBtn").addEventListener("click", async () => {
+      const pseudo = document.getElementById("pseudo").value.trim();
+      const password = document.getElementById("password").value.trim();
+      const message = document.getElementById("message");
+
+      if (!pseudo || !password) {
+        message.textContent = "⚠️ Remplis tous les champs";
+        message.style.color = "red";
+        return;
+      }
+
+      try {
+        const docRef = doc(db, "users", pseudo);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+          const userData = docSnap.data();
+          if (userData.password === password) {
+            message.textContent = "✅ Connexion réussie (Bienvenue " + pseudo + ")";
+            message.style.color = "green";
+            window.location.href = "dashboard.html";
+          } else {
+            message.textContent = "❌ Mot de passe incorrect";
+            message.style.color = "red";
+          }
+        } else {
+          await setDoc(docRef, {
+            password: password,
+            createdAt: new Date().toISOString()
+          });
+          message.textContent = "👤 Nouveau compte créé et connecté (Bienvenue " + pseudo + ")";
+          message.style.color = "green";
+          window.location.href = "dashboard.html";
+        }
+      } catch (e) {
+        console.error(e);
+        message.textContent = "⚠️ Erreur lors de la connexion";
+        message.style.color = "red";
+      }
+    });
+  </script>
+</body>
+</html>
