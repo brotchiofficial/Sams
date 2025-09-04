@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Connexion</title>
+  <style>
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      background: #2B2B3D;
+      font-family: Arial, sans-serif;
+      color: #f0f0f0;
+    }
+    .login-box {
+      background: #3a3a50;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.4);
+      text-align: center;
+      width: 320px;
+    }
+    input {
+      width: 90%;
+      padding: 10px;
+      margin: 8px 0;
+      border-radius: 6px;
+      border: none;
+    }
+    button {
+      padding: 10px;
+      width: 100%;
+      background: #007BFF;
+      border: none;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      border-radius: 6px;
+      margin-top: 10px;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    #message {
+      margin-top: 10px;
+      font-weight: bold;
+      color: #ff6666;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-box">
+    <img src="Logo.png" alt="Logo" width="120" id="logo"><br>
+    <h2 id="title">Connexion</h2>
+
+    <div id="step1">
+      <input type="text" id="pseudo" placeholder="Pseudo" required><br>
+      <button id="nextBtn">Continuer</button>
+    </div>
+
+    <div id="step2-login" style="display:none;">
+      <input type="password" id="password" placeholder="Mot de passe" required><br>
+      <button id="loginBtn">Se connecter</button>
+    </div>
+
+    <div id="step2-register" style="display:none;">
+      <input type="password" id="newPassword" placeholder="Créer un mot de passe" required><br>
+      <input type="password" id="confirmPassword" placeholder="Confirmer le mot de passe" required><br>
+      <button id="registerBtn">Créer le compte</button>
+    </div>
+
+    <div id="message"></div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
+    import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDMGMkmVgl8h0WuknCA-AChlyoX95RufNs",
+      authDomain: "base-de-donnee-b5c8c.firebaseapp.com",
+      projectId: "base-de-donnee-b5c8c",
+      storageBucket: "base-de-donnee-b5c8c.firebasestorage.app",
+      messagingSenderId: "302677536354",
+      appId: "1:302677536354:web:54e0d4562bad5f06c3ab3b"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    let currentPseudo = "";
+    const forbiddenAdmins = ["admin", "Admin", "ADMIN", "@dmin", "aDmin"];
+    const adminPassword = "St@dium17893Us";
+
+    const savedUser = localStorage.getItem("currentUser");
+    if (savedUser) {
+      window.location.href = "dashboard.html";
+    }
+
+    document.getElementById("nextBtn").addEventListener("click", async () => {
+      const pseudo = document.getElementById("pseudo").value.trim();
+      const message = document.getElementById("message");
+
+      if (!pseudo) {
+        message.textContent = "⚠️ Entre un pseudo";
+        return;
+      }
+
+      if (forbiddenAdmins.includes(pseudo)) {
+        message.textContent = "❌ Pseudo invalide";
+        return;
+      }
+
+      currentPseudo = pseudo;
+      const docRef = doc(db, "users", pseudo);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        document.getElementById("step1").style.display = "none";
+        document.getElementById("step2-login").style.display = "block";
+        document.getElementById("title").textContent = "Connexion pour " + pseudo;
+        message.textContent = "";
+      } else {
+        document.getElementById("step1").style.display = "none";
+        document.getElementById("step2-register").style.display = "block";
+        document.getElementById("title").textContent = "Créer un compte : " + pseudo;
+        message.textContent = "";
+      }
+    });
+
+    document.getElementById("loginBtn").addEventListener("click", async () => {
+      const password = document.getElementById("password").value.trim();
+      const message = document.getElementById("message");
+      const docRef = doc(db, "users", currentPseudo);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        const userData = docSnap.data();
+        if (userData.password === password) {
+          localStorage.setItem("currentUser", JSON.stringify({
+            pseudo: currentPseudo,
+            grade: userData.grade
+          }));
+          window.location.href = "dashboard.html";
+        } else {
+          message.textContent = "❌ Mot de passe incorrect";
+        }
+      }
+    });
+
+    document.getElementById("registerBtn").addEventListener("click", async () => {
+      const pwd1 = document.getElementById("newPassword").value.trim();
+      const pwd2 = document.getElementById("confirmPassword").value.trim();
+      const message = document.getElementById("message");
+
+      if (!pwd1 || !pwd2) {
+        message.textContent = "⚠️ Remplis tous les champs";
+        return;
+      }
+
+      if (pwd1 !== pwd2) {
+        message.textContent = "⚠️ Les mots de passe ne correspondent pas";
+        return;
+      }
+
+      try {
+        const docRef = doc(db, "users", currentPseudo);
+        await setDoc(docRef, {
+          password: pwd1,
+          grade: "new",
+          createdAt: new Date().toISOString()
+        });
+
+        localStorage.setItem("currentUser", JSON.stringify({
+          pseudo: currentPseudo,
+          grade: "new"
+        }));
+
+        window.location.href = "dashboard.html";
+      } catch (e) {
+        console.error(e);
+        message.textContent = "⚠️ Erreur lors de la création";
+      }
+    });
+
+    // Easter egg admin (5 clics sur logo)
+    let clickCount = 0;
+    let firstClickTime = null;
+    document.getElementById("logo").addEventListener("click", () => {
+      const now = Date.now();
+      if (!firstClickTime || now - firstClickTime > 10000) {
+        firstClickTime = now;
+        clickCount = 1;
+      } else {
+        clickCount++;
+      }
+      if (clickCount >= 5) {
+        const pwd = prompt("Mot de passe admin requis :");
+        if (pwd === adminPassword) {
+          localStorage.setItem("currentUser", JSON.stringify({
+            pseudo: "ADMIN",
+            grade: "admin"
+          }));
+          window.location.href = "dashboard.html";
+        } else {
+          alert("Mot de passe incorrect");
+        }
+        clickCount = 0;
+        firstClickTime = null;
+      }
+    });
+  </script>
+</body>
+</html>
