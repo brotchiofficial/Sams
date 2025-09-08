@@ -1,0 +1,979 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dashboard — Firestore (Glass)</title>
+  <meta name="description" content="Dashboard temps réel basé sur Firestore (sans Auth). Thème sombre, glass." />
+  <style>
+    :root{
+      --bg:#2B2B3D;
+      --surf: rgba(255,255,255,0.06);
+      --glass-border: rgba(255,255,255,0.12);
+      --text:#F0F2F5;
+      --muted:#C2C7D0;
+      --primary:#60D394;
+      --accent:#6EC3FF;
+      --danger:#FF6B6B;
+      --shadow: 0 12px 34px rgba(0,0,0,0.5);
+      --radius: 18px;
+      --radius-lg: 22px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%; background:var(--bg); color:var(--text); margin:0;
+      font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";}
+    header.top{
+      position:sticky; top:0; z-index:5;
+      display:flex; align-items:center; justify-content:space-between;
+      padding:10px 14px; background:rgba(25,25,35,0.4);
+      border-bottom:1px solid var(--glass-border); backdrop-filter:blur(12px) saturate(120%);
+    }
+    .brand{display:flex; align-items:center; gap:10px}
+    .brand img{height:34px; width:34px; border-radius:10px; filter:drop-shadow(0 8px 18px rgba(0,0,0,.45)); user-select:none; cursor:pointer}
+    .brand h1{font-size:16px; margin:0; letter-spacing:.5px; opacity:.9}
+    .actions{display:flex; gap:10px; align-items:center}
+    .btn{
+      padding:10px 14px; border-radius:12px; border:1px solid var(--glass-border);
+      background:var(--surf); color:var(--text); cursor:pointer; font-weight:600;
+      box-shadow:var(--shadow); backdrop-filter: blur(10px) saturate(120%);
+      transition: transform .1s ease, background .2s ease, border-color .2s ease;
+    }
+    .btn:hover{ transform: translateY(-1px); border-color: rgba(255,255,255,0.22);}
+    .btn.link{ background: transparent; border-color: transparent; box-shadow:none; opacity:.9}
+    .btn.primary{ background: linear-gradient(135deg, var(--primary), #3fb88b); color:#0b1914; border: none; box-shadow: 0 10px 22px rgba(96,211,148,.35);}
+    .btn.danger{ background: linear-gradient(135deg, #ff7a7a, var(--danger)); color:#230b0b; border:none; box-shadow: 0 10px 22px rgba(255,107,107,.35);}
+    .grid{ display:grid; grid-template-columns: 280px 1fr 320px; gap:14px; padding:14px; }
+    aside, main{ background: var(--surf); border:1px solid var(--glass-border); border-radius: var(--radius); box-shadow: var(--shadow); min-height: calc(100vh - 80px); padding: 12px; }
+    aside h2, main h2{font-size:14px; text-transform:uppercase; letter-spacing:1px; opacity:.9; margin:6px 0 10px 6px}
+    .list{ display:flex; flex-direction:column; gap:8px; max-height: calc(100vh - 150px); overflow:auto; padding-right:4px; }
+    .item{
+      display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px; border-radius:14px;
+      background: rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); cursor:pointer;
+    }
+    .item:hover{ background: rgba(255,255,255,0.07);}
+    .left{ display:flex; align-items:center; gap:10px }
+    .dot{ width:12px; height:12px; border-radius:50%; border:2px solid #fff; background:transparent; }
+    .dot.on{ background: #24d181; border-color: #24d181; }
+    .pseudo{ font-weight:700; letter-spacing:.3px}
+    .since{ color:var(--muted); font-size:12px}
+    .search{ display:flex; gap:8px; margin:8px 6px 12px; }
+    .search input{ flex:1; padding:10px 12px; border-radius:12px; border:1px solid var(--glass-border); background: rgba(255,255,255,0.04); color:var(--text) }
+    .search input::placeholder{ color:#9aa1ad }
+    .center-empty{ text-align:center; opacity:.85; padding:20px 8px }
+
+    /* Cards */
+    .cards{ display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:12px; margin-bottom:14px; }
+    .card{ background: rgba(255,255,255,0.05); border:1px solid var(--glass-border); border-radius: 16px; padding:12px 14px; }
+    .kpi{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .kpi .big{ font-size:28px; font-weight:800; letter-spacing:.5px }
+    .kpi .muted{ color:var(--muted); font-size:13px }
+
+    /* Table */
+    table{ width:100%; border-collapse: separate; border-spacing:0 8px; font-size:14px; }
+    th, td{ text-align:left; padding:10px 12px; background: rgba(255,255,255,0.04); border-top:1px solid rgba(255,255,255,0.08); border-bottom:1px solid rgba(255,255,255,0.08); }
+    th:first-child, td:first-child{ border-left:1px solid rgba(255,255,255,0.08); border-top-left-radius:12px; border-bottom-left-radius:12px; }
+    th:last-child, td:last-child{ border-right:1px solid rgba(255,255,255,0.08); border-top-right-radius:12px; border-bottom-right-radius:12px; }
+    select, input, textarea{ background: rgba(255,255,255,0.04); color: var(--text); border:1px solid var(--glass-border); border-radius: 10px; padding:8px 10px; }
+
+    /* Overlays */
+    .overlay{
+      position: fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:50;
+      background: rgba(10,12,16,0.45); backdrop-filter: blur(8px);
+    }
+    .overlay.show{ display:flex }
+    .modal{
+      width:min(900px, 92vw); max-height: 88vh; overflow:auto;
+      background: var(--surf); border:1px solid var(--glass-border); border-radius: var(--radius-lg);
+      box-shadow: var(--shadow); padding: 16px;
+    }
+    .close-x{ float:right; cursor:pointer; opacity:.8 }
+    .muted{ color: var(--muted) }
+    .danger-text{ color: var(--danger) }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="brand"><img src="Logo.png" id="brandLogo" alt="Logo"><h1>Centre Opérationnel</h1></div>
+    <div class="actions">
+      <button id="btnLogs" class="btn" style="display:none">Logs</button>
+      <button id="btnLogout" class="btn link">Déconnexion</button>
+    </div>
+  </header>
+
+  <div class="grid">
+    <aside>
+      <h2>Joueurs</h2>
+      <div id="playersList" class="list" aria-live="polite"></div>
+    </aside>
+
+    <main>
+      <h2>Tableau de bord</h2>
+      <div id="nonAdminEmpty" class="center-empty">Connectez-vous pour voir vos informations.</div>
+      <div id="kpiArea" class="cards" style="display:none">
+        <div class="card">
+          <div class="kpi">
+            <div><div class="muted">Statut</div><div id="statusIcon" class="big">⏹</div></div>
+            <div style="text-align:right"><div class="muted">Timer</div><div id="liveTimer" class="big">00h00</div></div>
+          </div>
+          <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap">
+            <button class="btn primary" id="btnStart">Commencer le service</button>
+            <button class="btn danger" id="btnStop">Finir le service</button>
+            <button class="btn" id="btnPwd">Changer le mot de passe</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="kpi"><div><div class="muted">Heures totales</div><div id="totalHours" class="big">0.00h</div></div></div>
+        </div>
+        <div class="card">
+          <div class="kpi"><div><div class="muted">Grade</div><div id="gradeLabel" class="big">—</div></div>
+          <div><div class="muted">Avert.</div><div id="warnCount" class="big">0</div></div></div>
+        </div>
+      </div>
+
+      <div id="adminPanel" style="display:none">
+        <h2>Panneau Admin</h2>
+        <div style="overflow:auto">
+          <table id="adminTable">
+            <thead>
+              <tr>
+                <th>Pseudo</th>
+                <th>Créé le</th>
+                <th>Grade</th>
+                <th>Heures totales</th>
+                <th>Avert.</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+
+    <aside>
+      <h2>Patients</h2>
+      <div style="display:flex; justify-content:space-between; margin: 6px 6px 10px">
+        <button id="btnCreatePatient" class="btn">Créer une fiche</button>
+      </div>
+      <div class="search"><input id="patientSearch" placeholder="Rechercher patient…" disabled /></div>
+      <div id="patientsList" class="list"></div>
+    </aside>
+  </div>
+
+  <!-- Overlays -->
+  <div id="overlayLogin" class="overlay show" role="dialog" aria-modal="true">
+    <div class="modal" style="max-width:520px">
+      <span class="close-x" id="closeLogin" title="Fermer">✖</span>
+      <div style="text-align:center">
+        <img src="Logo.png" alt="Logo" style="height:64px; width:64px; border-radius:12px">
+        <h3>Connexion</h3>
+        <p class="muted">Pas d'Auth Firebase — pseudo + mot de passe (hashé SHA‑256).</p>
+      </div>
+      <div id="loginStep1">
+        <label>Pseudo</label>
+        <input id="loginPseudo" placeholder="ex: Jules" autofocus />
+        <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:10px">
+          <button class="btn" id="btnNext">Continuer</button>
+        </div>
+      </div>
+      <div id="loginStepCreate" style="display:none">
+        <div class="muted" style="margin-bottom:8px">Nouveau joueur « <span id="newPseudo"></span> »</div>
+        <label>Mot de passe</label><input type="password" id="pw1" placeholder="••••••" />
+        <label>Confirmer</label><input type="password" id="pw2" placeholder="••••••" />
+        <div style="display:flex; gap:8px; justify-content:space-between; margin-top:10px">
+          <button class="btn link" id="back1">Retour</button>
+          <button class="btn primary" id="btnCreate">Créer</button>
+        </div>
+      </div>
+      <div id="loginStepPw" style="display:none">
+        <div class="muted" style="margin-bottom:8px">Pseudo « <span id="existingPseudo"></span> »</div>
+        <label>Mot de passe</label><input type="password" id="pwLogin" placeholder="••••••" />
+        <div style="display:flex; gap:8px; justify-content:space-between; margin-top:10px">
+          <button class="btn link" id="back2">Retour</button>
+          <button class="btn primary" id="btnLogin">Se connecter</button>
+        </div>
+      </div>
+      <p id="loginMsg" class="danger-text" style="min-height:18px"></p>
+    </div>
+  </div>
+
+  <div id="overlayLogs" class="overlay">
+    <div class="modal"><span class="close-x" id="closeLogs">✖</span><h3>Logs</h3><div id="logsList"></div></div>
+  </div>
+
+  <div id="overlayProfile" class="overlay">
+    <div class="modal" style="max-width:640px">
+      <span class="close-x" id="closeProfile">✖</span>
+      <h3>Profil joueur</h3>
+      <div id="profileBody"></div>
+    </div>
+  </div>
+
+  <div id="overlayWarnings" class="overlay">
+    <div class="modal" style="max-width:640px">
+      <span class="close-x" id="closeWarnings">✖</span>
+      <h3>Historique des avertissements</h3>
+      <div id="warningsList"></div>
+    </div>
+  </div>
+
+  <div id="overlayPwd" class="overlay">
+    <div class="modal" style="max-width:520px">
+      <span class="close-x" id="closePwd">✖</span>
+      <h3>Changer le mot de passe</h3>
+      <label>Nouveau mot de passe</label><input type="password" id="newPw1" />
+      <label>Confirmer</label><input type="password" id="newPw2" />
+      <div style="display:flex; justify-content:flex-end; margin-top:10px"><button class="btn primary" id="btnSavePw">Mettre à jour</button></div>
+      <div id="pwdMsg" class="muted"></div>
+    </div>
+  </div>
+
+  <div id="overlayPatientForm" class="overlay">
+    <div class="modal">
+      <span class="close-x" id="closePatientForm">✖</span>
+      <h3>Créer une fiche patient</h3>
+      <form id="patientForm">
+        <div style="display:flex; gap:12px; flex-wrap:wrap">
+          <div style="flex:1; min-width:220px">
+            <label>Nom</label>
+            <input name="nom" id="pf_nom" list="datalistNom" placeholder="DURAND" required />
+            <datalist id="datalistNom"></datalist>
+          </div>
+          <div style="flex:1; min-width:220px">
+            <label>Prénom</label>
+            <input name="prenom" id="pf_prenom" placeholder="Alice" required />
+          </div>
+          <div style="flex:1; min-width:220px">
+            <label>Date de naissance</label>
+            <input type="date" name="dateNaissance" id="pf_dob" required />
+          </div>
+          <div style="flex:1; min-width:160px">
+            <label>Âge</label>
+            <input id="pf_age" readonly />
+          </div>
+          <div style="flex:1; min-width:160px">
+            <label>Sexe</label>
+            <select name="sexe" id="pf_sexe">
+              <option value="H">H</option>
+              <option value="F">F</option>
+            </select>
+          </div>
+          <div style="flex:1; min-width:220px">
+            <label>Groupe sanguin</label>
+            <select name="groupeSanguin" id="pf_group">
+              <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+              <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
+            </select>
+          </div>
+          <div style="flex:1; min-width:220px">
+            <label>Allergies</label>
+            <input name="allergies" id="pf_allergies" placeholder="Arachides…" />
+          </div>
+          <div style="flex:1; min-width:160px">
+            <label>Taille (cm)</label>
+            <input name="taille" id="pf_taille" type="number" min="0" step="1" />
+          </div>
+          <div style="flex:1; min-width:160px">
+            <label>Poids (kg)</label>
+            <input name="poids" id="pf_poids" type="number" min="0" step="0.1" />
+          </div>
+          <div style="flex:1; min-width:220px">
+            <label>Téléphone</label>
+            <input name="telephone" id="pf_tel" placeholder="+32…" />
+          </div>
+        </div>
+
+        <hr style="margin:14px 0; border-color: rgba(255,255,255,0.12)">
+
+        <div style="display:flex; gap:12px; flex-wrap:wrap">
+          <div style="flex:1; min-width:220px">
+            <label>Personnelles en charge (facultatif)</label>
+            <input name="personnelles" id="pf_pers" />
+          </div>
+          <div style="flex:1; min-width:220px">
+            <label>Nature de la blessure</label>
+            <input name="nature" id="pf_nature" />
+          </div>
+          <div style="flex:1; min-width:220px">
+            <label>Type de blessure</label>
+            <input name="type" id="pf_type" />
+          </div>
+          <div style="flex:1; min-width:200px">
+            <label>Gravité</label>
+            <select name="gravite" id="pf_gravite">
+              <option>Légère</option><option>Modérée</option><option>Grave</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:10px">
+          <div><label>IRM</label><select id="pf_irm"><option>non</option><option>oui</option></select></div>
+          <div><label>Scanner</label><select id="pf_scanner"><option>non</option><option>oui</option></select></div>
+          <div><label>Opération</label><select id="pf_operation"><option>non</option><option>oui</option></select></div>
+          <div><label>Soins</label><select id="pf_soins"><option>non</option><option>oui</option></select></div>
+          <div style="flex:1; min-width:260px">
+            <label>Type de prise en charge</label>
+            <input id="pf_prise" />
+          </div>
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; margin-top:14px; gap:8px">
+          <button type="button" class="btn link" id="btnCancelPatient">Annuler</button>
+          <button type="submit" class="btn primary">Enregistrer</button>
+        </div>
+      </form>
+      <div id="patientFormMsg" class="muted"></div>
+    </div>
+  </div>
+
+  <div id="overlayPatientStack" class="overlay">
+    <div class="modal">
+      <span class="close-x" id="closePatientStack">✖</span>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px">
+        <button id="prevFiche" class="btn">◀</button>
+        <div id="stackInfo" class="muted">—</div>
+        <button id="nextFiche" class="btn">▶</button>
+      </div>
+      <div id="ficheView"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    // === Firebase via CDN ESM (v12.2.1) ===
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
+    import {
+      getFirestore, doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc, getDocs,
+      onSnapshot, collection, serverTimestamp, orderBy, query, collectionGroup
+    } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+
+    // --- Config (fournie, à utiliser telle quelle)
+    const firebaseConfig = {
+      apiKey: "AIzaSyDMGMkmVgl8h0WuknCA-AChlyoX95RufNs",
+      authDomain: "base-de-donnee-b5c8c.firebaseapp.com",
+      projectId: "base-de-donnee-b5c8c",
+      storageBucket: "base-de-donnee-b5c8c.firebasestorage.app",
+      messagingSenderId: "302677536354",
+      appId: "1:302677536354:web:54e0d4562bad5f06c3ab3b"
+    };
+
+    // --- Init
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // --- DOM helpers
+    const $ = (sel) => document.querySelector(sel);
+    const el = (tag, opts={}) => Object.assign(document.createElement(tag), opts);
+
+    // --- Time helpers
+    function toMs(x){
+      if (!x) return 0;
+      if (typeof x === "number") return x;
+      if (typeof x === "string"){ const d = new Date(x); return isNaN(d) ? 0 : d.getTime(); }
+      if (x instanceof Date) return x.getTime();
+      if (x.seconds !== undefined) return x.seconds*1000 + Math.floor((x.nanoseconds||0)/1e6);
+      if (x.toDate) try { return x.toDate().getTime(); } catch {}
+      return 0;
+    }
+    function fmtHM(ms){
+      const total = Math.max(0, Math.floor(ms/1000));
+      const hh = Math.floor(total/3600);
+      const mm = Math.floor((total%3600)/60);
+      return String(hh).padStart(2,'0') + "h" + String(mm).padStart(2,'0');
+    }
+    function pad2(n){ return String(n).padStart(2,"0"); }
+    function fmtCreated(ts){
+      const d = new Date(toMs(ts));
+      return `créé le ${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()} à ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+    }
+
+    // --- SHA-256
+    function toHex(buffer){ const view = new Uint8Array(buffer); return Array.from(view).map(b => b.toString(16).padStart(2,'0')).join(''); }
+    async function sha256Hex(str){ const enc = new TextEncoder().encode(str); const buf = await crypto.subtle.digest("SHA-256", enc); return toHex(buf); }
+
+    // --- Pseudos interdits
+    function isForbiddenPseudo(p){
+      const s = (p||"").trim();
+      const norm = s.replace(/@/g, "a").replace(/[^a-z]/gi,"").toLowerCase();
+      return norm === "admin";
+    }
+
+    // --- State
+    let currentUser = null; // { pseudo, data }
+    let unsubUsers = null, unsubMe = null, unsubLogs = null, unsubWarningsGroup = null, unsubFiches = null;
+    let playersCache = new Map(); // pseudo -> data
+    let warningsCountMap = new Map(); // pseudo -> count
+    let sinceTimer = null, kpiTimer = null;
+
+    // Patients
+    let fichesAll = []; // array of all fiches
+    const fichesByKey = new Map(); // "NOM prenom" -> array (asc by createdAt)
+    const lastNamesSet = new Set();
+
+    // --- Logs util
+    async function logMsg(user, message){
+      try{ await addDoc(collection(db,"logs"), { user, message, createdAt: serverTimestamp() }); }
+      catch(e){ console.error("log error", e); }
+    }
+
+    // --- UI refs
+    const playersList = $("#playersList");
+    const kpiArea = $("#kpiArea");
+    const nonAdminEmpty = $("#nonAdminEmpty");
+    const btnStart = $("#btnStart");
+    const btnStop = $("#btnStop");
+    const btnPwd = $("#btnPwd");
+    const statusIcon = $("#statusIcon");
+    const liveTimer = $("#liveTimer");
+    const totalHours = $("#totalHours");
+    const gradeLabel = $("#gradeLabel");
+    const warnCount = $("#warnCount");
+    const adminPanel = $("#adminPanel");
+    const adminTableBody = () => $("#adminTable tbody");
+
+    // Patients UI refs
+    const btnCreatePatient = $("#btnCreatePatient");
+    const patientsList = $("#patientsList");
+    const patientSearch = $("#patientSearch");
+
+    // Overlays
+    const overlayLogin = $("#overlayLogin");
+    const loginMsg = $("#loginMsg");
+    const step1 = $("#loginStep1");
+    const stepCreate = $("#loginStepCreate");
+    const stepPw = $("#loginStepPw");
+    const loginPseudo = $("#loginPseudo");
+    const newPseudoSpan = $("#newPseudo");
+    const existingPseudoSpan = $("#existingPseudo");
+    const pw1 = $("#pw1"), pw2 = $("#pw2");
+    const pwLogin = $("#pwLogin");
+
+    const overlayLogs = $("#overlayLogs");
+    const overlayProfile = $("#overlayProfile");
+    const overlayWarnings = $("#overlayWarnings");
+    const overlayPwd = $("#overlayPwd");
+    const overlayPatientForm = $("#overlayPatientForm");
+    const overlayPatientStack = $("#overlayPatientStack");
+
+    // --- Login workflow
+    $("#btnNext").onclick = async () => {
+      loginMsg.textContent = "";
+      const pseudo = (loginPseudo.value||"").trim();
+      if (!pseudo){ loginMsg.textContent = "Pseudo requis."; return; }
+      if (isForbiddenPseudo(pseudo)){ loginMsg.textContent = "Pseudo invalide."; return; }
+      const ref = doc(db, "users", pseudo);
+      const snap = await getDoc(ref);
+      step1.style.display = "none";
+      if (!snap.exists()){
+        newPseudoSpan.textContent = pseudo;
+        stepCreate.style.display = "block";
+      }else{
+        existingPseudoSpan.textContent = pseudo;
+        stepPw.style.display = "block";
+      }
+    };
+    $("#back1").onclick = () => { stepCreate.style.display="none"; step1.style.display="block"; };
+    $("#back2").onclick = () => { stepPw.style.display="none"; step1.style.display="block"; };
+
+    $("#btnCreate").onclick = async () => {
+      loginMsg.textContent = "";
+      const pseudo = newPseudoSpan.textContent;
+      const a = pw1.value, b = pw2.value;
+      if (!a || a.length < 4){ loginMsg.textContent = "Mot de passe trop court (min 4)."; return; }
+      if (a !== b){ loginMsg.textContent = "Les mots de passe ne correspondent pas."; return; }
+      const hash = await sha256Hex(a);
+      const ref = doc(db, "users", pseudo);
+      await setDoc(ref, {
+        pseudo, password: hash, grade: "new", createdAt: serverTimestamp(),
+        serviceActive: false, serviceStart: null, totalHours: 0, weeklyHours: 0, weekAnchor: null
+      });
+      await logMsg(pseudo, "a créé un compte");
+      await afterLogin(pseudo);
+    };
+
+    $("#btnLogin").onclick = async () => {
+      loginMsg.textContent = "";
+      const pseudo = existingPseudoSpan.textContent;
+      const ref = doc(db, "users", pseudo);
+      const snap = await getDoc(ref);
+      if (!snap.exists()){ loginMsg.textContent = "Utilisateur introuvable."; return; }
+      const hash = await sha256Hex(pwLogin.value || "");
+      if (hash !== (snap.data().password||"")){ loginMsg.textContent = "Mot de passe incorrect."; return; }
+      await afterLogin(pseudo);
+    };
+
+    async function afterLogin(pseudo){
+      currentUser = { pseudo, data: null };
+      overlayLogin.classList.remove("show");
+      kpiArea.style.display = "grid";
+      nonAdminEmpty.style.display = "none";
+      patientSearch.disabled = false;
+      subscribeCore();
+    }
+
+    // --- Déconnexion
+    $("#btnLogout").onclick = () => {
+      cleanupSubs();
+      currentUser = null;
+      if (sinceTimer) clearInterval(sinceTimer);
+      if (kpiTimer) clearInterval(kpiTimer);
+      playersList.innerHTML = "";
+      patientsList.innerHTML = "";
+      kpiArea.style.display = "none";
+      nonAdminEmpty.style.display = "block";
+      adminPanel.style.display = "none";
+      $("#btnLogs").style.display = "none";
+      overlayLogin.classList.add("show");
+      loginMsg.textContent = "";
+      step1.style.display = "block";
+      stepCreate.style.display = "none";
+      stepPw.style.display = "none";
+      loginPseudo.value = "";
+      pw1.value = pw2.value = pwLogin.value = "";
+      patientSearch.value = "";
+      warnCount.textContent = "0";
+    };
+
+    // --- Admin secret
+    (function adminSecret(){
+      const logo = $("#brandLogo");
+      let clicks = [];
+      logo.addEventListener("click", async () => {
+        const now = Date.now();
+        clicks.push(now);
+        clicks = clicks.filter(t => now - t <= 10000);
+        if (clicks.length >= 5){
+          clicks = [];
+          const pass = prompt("Mot de passe admin ?");
+          if (pass === "St@dium17893Us"){
+            const pseudo = "Admin";
+            const ref = doc(db, "users", pseudo);
+            const snap = await getDoc(ref);
+            if (!snap.exists()){
+              await setDoc(ref, {
+                pseudo, password: await sha256Hex(pass), grade: "admin", createdAt: serverTimestamp(),
+                serviceActive: false, serviceStart: null, totalHours: 0, weeklyHours: 0, weekAnchor: null
+              });
+            }else if ((snap.data().grade||"") !== "admin"){
+              await updateDoc(ref, { grade: "admin" });
+            }
+            await logMsg(pseudo, "accès admin (secret) validé");
+            await afterLogin(pseudo);
+          }else{
+            alert("Mot de passe incorrect.");
+          }
+        }
+      });
+    })();
+
+    // --- Logs
+    $("#btnLogs").onclick = () => overlayLogs.classList.add("show");
+    $("#closeLogs").onclick = () => overlayLogs.classList.remove("show");
+
+    // --- Subscriptions
+    function cleanupSubs(){
+      [unsubUsers, unsubMe, unsubLogs, unsubWarningsGroup, unsubFiches].forEach(u => { try{ u && u(); }catch{} });
+      unsubUsers = unsubMe = unsubLogs = unsubWarningsGroup = unsubFiches = null;
+      playersCache.clear();
+      warningsCountMap.clear();
+      fichesAll = [];
+      fichesByKey.clear();
+      lastNamesSet.clear();
+    }
+
+    function subscribeCore(){
+      cleanupSubs();
+
+      // Current user live
+      unsubMe = onSnapshot(doc(db, "users", currentUser.pseudo), snap => {
+        if (!snap.exists()) return;
+        currentUser.data = snap.data();
+        updateKpis();
+        const g = currentUser.data.grade || "new";
+        const isAdmin = g === "admin";
+        adminPanel.style.display = isAdmin ? "block" : "none";
+        $("#btnLogs").style.display = isAdmin ? "inline-block" : "none";
+      });
+
+      // Users list live
+      unsubUsers = onSnapshot(collection(db, "users"), qSnap => {
+        playersCache.clear();
+        qSnap.forEach(docSnap => playersCache.set(docSnap.id, docSnap.data()));
+        renderPlayers();
+        renderAdminTable();
+      });
+
+      // Logs live
+      unsubLogs = onSnapshot(query(collection(db, "logs"), orderBy("createdAt", "desc")), qSnap => {
+        const list = $("#logsList"); list.innerHTML = "";
+        qSnap.forEach(s => {
+          const d = s.data();
+          const when = fmtCreated(d.createdAt);
+          const p = el("p", { innerHTML: `<span class="muted">${when}</span> — <strong>${d.user}</strong> ${d.message}` });
+          list.appendChild(p);
+        });
+      });
+
+      // Warnings counts (for admin table & KPI)
+      unsubWarningsGroup = onSnapshot(collectionGroup(db, "warnings"), qSnap => {
+        warningsCountMap.clear();
+        qSnap.forEach(s => {
+          const parts = s.ref.path.split("/"); // users/{pseudo}/warnings/{id}
+          const pseudo = parts[1];
+          warningsCountMap.set(pseudo, (warningsCountMap.get(pseudo)||0) + 1);
+        });
+        renderAdminTable();
+        warnCount.textContent = warningsCountMap.get(currentUser?.pseudo||"") || 0;
+      });
+
+      // Fiches live
+      unsubFiches = onSnapshot(collection(db, "Fiche"), qSnap => {
+        fichesAll = [];
+        fichesByKey.clear();
+        lastNamesSet.clear();
+        qSnap.forEach(s => {
+          const d = s.data();
+          const id = s.id;
+          fichesAll.push({ id, ...d });
+          const key = keyPatient(d.nom, d.prenom);
+          if (!fichesByKey.has(key)) fichesByKey.set(key, []);
+          fichesByKey.get(key).push({ id, ...d });
+          if (d.nom) lastNamesSet.add(String(d.nom).toUpperCase());
+        });
+        // sort stacks asc by createdAt
+        for (const arr of fichesByKey.values()) arr.sort((a,b) => toMs(a.createdAt) - toMs(b.createdAt));
+        renderPatients();
+        refreshDatalistNom();
+      });
+    }
+
+    // --- KPIs for current user
+    function updateKpis(){
+      const d = currentUser?.data || {};
+      const active = !!d.serviceActive;
+      statusIcon.textContent = active ? "▶️" : "⏹";
+      const start = toMs(d.serviceStart);
+      if (kpiTimer) clearInterval(kpiTimer);
+      const tick = () => { const ms = active ? (Date.now() - start) : 0; liveTimer.textContent = fmtHM(ms); };
+      tick(); kpiTimer = setInterval(tick, 1000);
+      totalHours.textContent = ((d.totalHours||0).toFixed(2)) + "h";
+      gradeLabel.textContent = d.grade || "—";
+      warnCount.textContent = warningsCountMap.get(currentUser?.pseudo||"") || 0;
+    }
+
+    // --- Start/Stop buttons
+    $("#btnStart").onclick = async () => {
+      if (!currentUser) return;
+      const ref = doc(db, "users", currentUser.pseudo);
+      await updateDoc(ref, { serviceActive: true, serviceStart: serverTimestamp() });
+      await logMsg(currentUser.pseudo, "a commencé son service");
+    };
+    $("#btnStop").onclick = async () => { await stopServiceFor(currentUser?.pseudo); };
+
+    async function stopServiceFor(pseudo){
+      if (!pseudo) return;
+      const ref = doc(db, "users", pseudo);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) return;
+      const d = snap.data();
+      if (!d.serviceActive || !d.serviceStart) return;
+      const startMs = toMs(d.serviceStart), nowMs = Date.now();
+      const durH = Math.max(0, (nowMs - startMs) / 3600000);
+      const newTotal = (d.totalHours||0) + durH;
+      const newWeekly = (d.weeklyHours||0) + durH;
+      await updateDoc(ref, { serviceActive:false, serviceStart:null, totalHours:newTotal, weeklyHours:newWeekly });
+      await logMsg(currentUser?.pseudo||pseudo, `a terminé son service (+${durH.toFixed(2)}h)`);
+    }
+
+    // --- Change password
+    btnPwd.onclick = () => overlayPwd.classList.add("show");
+    $("#closePwd").onclick = () => overlayPwd.classList.remove("show");
+    $("#btnSavePw").onclick = async () => {
+      const a = $("#newPw1").value, b = $("#newPw2").value;
+      if (!a || a.length<4){ $("#pwdMsg").textContent = "Mot de passe trop court (min 4)."; return; }
+      if (a!==b){ $("#pwdMsg").textContent = "Les mots de passe ne correspondent pas."; return; }
+      const hash = await sha256Hex(a);
+      await updateDoc(doc(db,"users", currentUser.pseudo), { password: hash });
+      $("#pwdMsg").textContent = "Mot de passe mis à jour.";
+      await logMsg(currentUser.pseudo, "a changé son mot de passe");
+      setTimeout(()=> overlayPwd.classList.remove("show"), 800);
+    };
+
+    // --- Players sidebar
+    function renderPlayers(){
+      const arr = [...playersCache.entries()].map(([pseudo, d]) => ({ pseudo, ...d }));
+      arr.sort((a,b)=> a.pseudo.localeCompare(b.pseudo, "fr", { sensitivity:"base" }));
+      playersList.innerHTML = "";
+      const now = Date.now();
+      for (const u of arr){
+        const li = el("div", { className:"item" });
+        const dot = el("span", { className: "dot" + (u.serviceActive ? " on" : "") });
+        const left = el("div", { className:"left" });
+        const name = el("div", { className:"pseudo", textContent:u.pseudo });
+        left.append(dot, name);
+        const since = el("div", { className:"since", textContent: u.serviceActive ? ("depuis " + fmtHM(now - toMs(u.serviceStart))) : "" });
+        li.append(left, since);
+        li.onclick = () => openProfile(u.pseudo);
+        playersList.appendChild(li);
+      }
+      if (sinceTimer) clearInterval(sinceTimer);
+      sinceTimer = setInterval(() => {
+        const now = Date.now();
+        [...playersList.children].forEach((node, idx) => {
+          const u = arr[idx]; if (!u) return;
+          node.querySelector(".since").textContent = u.serviceActive ? ("depuis " + fmtHM(now - toMs(u.serviceStart))) : "";
+          node.querySelector(".dot").classList.toggle("on", !!u.serviceActive);
+        });
+      }, 5000);
+    }
+
+    // --- Profile overlay (with warnings + stop service for tech/admin)
+    async function openProfile(pseudo){
+      const ref = doc(db, "users", pseudo);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) return;
+      const d = snap.data();
+      const canStop = ["technicien","admin"].includes(currentUser?.data?.grade) && !!d.serviceActive;
+      const wc = warningsCountMap.get(pseudo) || 0;
+      const html = `
+        <div style="display:flex; gap:12px; flex-wrap:wrap">
+          <div class="card" style="flex:1; min-width:260px">
+            <div class="muted">Pseudo</div><div><strong>${pseudo}</strong></div>
+            <div class="muted" style="margin-top:6px">Grade</div><div><strong>${d.grade||"new"}</strong></div>
+            <div class="muted" style="margin-top:6px">Créé</div><div>${fmtCreated(d.createdAt)}</div>
+            <div class="muted" style="margin-top:6px">Statut</div><div>${d.serviceActive ? '<span style="color:#60D394">en service</span>' : 'hors service'}</div>
+          </div>
+          <div class="card" style="flex:1; min-width:260px">
+            <div class="muted">Avertissements</div>
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:6px">
+              <div class="big">${wc}</div>
+              <button class="btn" id="btnWarnHistory" ${d.grade==='new' ? 'disabled' : ''}>Historique</button>
+            </div>
+          </div>
+          <div class="card" style="flex:1; min-width:260px">
+            <div class="muted">Arrêter le service</div>
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:6px">
+              <div>${d.serviceActive ? ('Actif depuis ' + fmtHM(Date.now() - toMs(d.serviceStart))) : '—'}</div>
+              <button class="btn danger" id="btnForceStop" ${canStop ? '' : 'disabled'}>Arrêter</button>
+            </div>
+            <div class="muted" style="font-size:12px;margin-top:6px">Visible pour technicien/admin uniquement.</div>
+          </div>
+        </div>`;
+      $("#profileBody").innerHTML = html;
+      overlayProfile.classList.add("show");
+      $("#closeProfile").onclick = ()=> overlayProfile.classList.remove("show");
+      const b1 = $("#btnWarnHistory");
+      if (b1) b1.onclick = ()=> openWarnings(pseudo, d.grade);
+      const b2 = $("#btnForceStop");
+      if (b2 && canStop) b2.onclick = async ()=>{ await stopServiceFor(pseudo); overlayProfile.classList.remove("show"); };
+    }
+
+    function openWarnings(pseudo, grade){
+      if (grade==='new') return;
+      const cont = $("#warningsList"); cont.innerHTML = "";
+      onSnapshot(query(collection(db,"users", pseudo, "warnings"), orderBy("createdAt","desc")), qSnap => {
+        cont.innerHTML = "";
+        qSnap.forEach(s => {
+          const w = s.data();
+          const row = el("div", { className: "item" });
+          row.innerHTML = `<div class="left"><div class="dot on"></div><div><strong>${w.by||"?"}</strong> — ${w.reason||""}<div class="muted">${fmtCreated(w.createdAt)}</div></div></div>`;
+          if ((currentUser?.data?.grade)==="admin"){
+            const b = el("button", { className:"btn danger", textContent:"Supprimer" });
+            b.onclick = async () => await deleteDoc(doc(db,"users", pseudo, "warnings", s.id));
+            row.appendChild(b);
+          }
+          cont.appendChild(row);
+        });
+      });
+      $("#closeWarnings").onclick = ()=> overlayWarnings.classList.remove("show");
+      overlayWarnings.classList.add("show");
+    }
+
+    // --- Admin table
+    function renderAdminTable(){
+      const body = adminTableBody(); if (!body) return;
+      const isAdmin = (currentUser?.data?.grade) === "admin";
+      if (!isAdmin){ body.innerHTML = ""; return; }
+      const arr = [...playersCache.entries()].map(([pseudo, d]) => ({ pseudo, ...d }));
+      arr.sort((a,b)=> a.pseudo.localeCompare(b.pseudo, "fr", { sensitivity:"base" }));
+      body.innerHTML = "";
+      for (const u of arr){
+        const tr = el("tr");
+        const warns = warningsCountMap.get(u.pseudo) || 0;
+        const dd = u.createdAt ? fmtCreated(u.createdAt) : "—";
+        const opts = ["new","certifié","technicien","admin"].map(g => `<option value="${g}" ${g===u.grade?"selected":""}>${g}</option>`).join("");
+        tr.innerHTML = `
+          <td><strong>${u.pseudo}</strong></td>
+          <td>${dd}</td>
+          <td><select data-pseudo="${u.pseudo}" class="gradeSel">${opts}</select></td>
+          <td>${(u.totalHours||0).toFixed(2)}h</td>
+          <td>${warns}</td>
+          <td><button class="btn danger" data-del="${u.pseudo}">Supprimer</button></td>`;
+        body.appendChild(tr);
+      }
+      body.querySelectorAll(".gradeSel").forEach(sel => {
+        sel.addEventListener("change", async (e) => {
+          const p = e.target.getAttribute("data-pseudo");
+          await updateDoc(doc(db,"users", p), { grade: e.target.value });
+          await logMsg(currentUser.pseudo, `a changé le grade de ${p} → ${e.target.value}`);
+        });
+      });
+      body.querySelectorAll('button[data-del]').forEach(btn => {
+        btn.addEventListener('click', async (e)=>{
+          const p = e.target.getAttribute('data-del');
+          if (!confirm(`Supprimer le joueur "${p}" ?`)) return;
+          try{
+            const wSnap = await getDocs(collection(db,'users', p, 'warnings'));
+            await Promise.all(wSnap.docs.map(d=> deleteDoc(d.ref)));
+          }catch{}
+          await deleteDoc(doc(db,'users', p));
+          await logMsg(currentUser.pseudo, `a supprimé le joueur ${p}`);
+        });
+      });
+    }
+
+    // --- Patients helpers & UI
+    function keyPatient(nom, prenom){ return (nom||"").trim().toUpperCase() + " " + (prenom||"").trim(); }
+    function ageFromDobStr(iso){
+      if (!iso) return "";
+      const d = new Date(iso); if (isNaN(d)) return "";
+      const now = new Date();
+      let age = now.getFullYear() - d.getFullYear();
+      const m = now.getMonth() - d.getMonth();
+      if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
+      return String(age);
+    }
+
+    function renderPatients(){
+      const q = (patientSearch.value||"").trim().toLowerCase();
+      const entries = [...fichesByKey.entries()].map(([key, arr]) => ({ key, latest: arr[arr.length-1], count: arr.length }));
+      const filtered = q ? entries.filter(e => e.key.toLowerCase().includes(q)) : entries;
+      filtered.sort((a,b)=> a.key.localeCompare(b.key, "fr", { sensitivity:"base" }));
+      patientsList.innerHTML = "";
+      for (const e of filtered){
+        const li = el("div", { className:"item" });
+        const left = el("div", { className:"left" });
+        const dot = el("span", { className:"dot on" });
+        const label = el("div", { className:"pseudo", textContent: e.key + `  (x${e.count})` });
+        left.append(dot, label);
+        li.append(left, el("div", { className:"since muted", textContent: e.latest?.groupeSanguin || "" }));
+        li.onclick = () => openPatientStack(e.key);
+        patientsList.appendChild(li);
+      }
+    }
+    patientSearch.oninput = renderPatients;
+
+    function refreshDatalistNom(){
+      const dl = $("#datalistNom"); if (!dl) return;
+      dl.innerHTML = "";
+      const arr = [...lastNamesSet].sort((a,b)=> a.localeCompare(b,"fr",{ sensitivity:"base"}));
+      for (const n of arr) dl.appendChild(el("option", { value: n }));
+    }
+
+    // Create patient
+    btnCreatePatient.onclick = () => overlayPatientForm.classList.add("show");
+    $("#closePatientForm").onclick = () => overlayPatientForm.classList.remove("show");
+    $("#btnCancelPatient").onclick = () => overlayPatientForm.classList.remove("show");
+
+    $("#pf_dob").oninput = ()=> $("#pf_age").value = ageFromDobStr($("#pf_dob").value);
+
+    // Autocomplétion NOM: >=3 lettres → si 1 seule correspondance, pré-remplir depuis la DERNIÈRE fiche de ce NOM
+    $("#pf_nom").addEventListener("input", (e)=>{
+      const val = (e.target.value||"").toUpperCase();
+      if (val.length >= 3){
+        const candidates = [...lastNamesSet].filter(n => n.startsWith(val));
+        if (candidates.length === 1){
+          const match = candidates[0];
+          let latest = null;
+          for (const f of fichesAll) if ((f.nom||"").toUpperCase() === match) latest = (!latest || toMs(f.createdAt) > toMs(latest.createdAt)) ? f : latest;
+          if (latest){
+            $("#pf_nom").value = latest.nom || match;
+            $("#pf_prenom").value = latest.prenom || "";
+            if (latest.dateNaissance) $("#pf_dob").value = (typeof latest.dateNaissance === "string") ? latest.dateNaissance.slice(0,10) : new Date(toMs(latest.dateNaissance)).toISOString().slice(0,10);
+            $("#pf_age").value = latest.age || ageFromDobStr($("#pf_dob").value);
+            if (latest.sexe) $("#pf_sexe").value = latest.sexe;
+            if (latest.groupeSanguin) $("#pf_group").value = latest.groupeSanguin;
+          }
+        }
+      }
+    });
+
+    $("#patientForm").addEventListener("submit", async (e)=>{
+      e.preventDefault();
+      if (!currentUser) return;
+      const g = (currentUser?.data?.grade)||"new";
+      if (g==="new"){ $("#patientFormMsg").textContent = "Accès refusé (grade new)."; return; }
+      const data = {
+        nom: $("#pf_nom").value.trim().toUpperCase(),
+        prenom: $("#pf_prenom").value.trim(),
+        dateNaissance: $("#pf_dob").value || null,
+        age: $("#pf_age").value || ageFromDobStr($("#pf_dob").value),
+        sexe: $("#pf_sexe").value,
+        groupeSanguin: $("#pf_group").value,
+        allergies: $("#pf_allergies").value || "",
+        taille: Number($("#pf_taille").value||0),
+        poids: Number($("#pf_poids").value||0),
+        telephone: $("#pf_tel").value || "",
+        personnelles: $("#pf_pers").value || "",
+        nature: $("#pf_nature").value || "",
+        type: $("#pf_type").value || "",
+        gravite: $("#pf_gravite").value || "",
+        irm: $("#pf_irm").value || "non",
+        scanner: $("#pf_scanner").value || "non",
+        operation: $("#pf_operation").value || "non",
+        soins: $("#pf_soins").value || "non",
+        prise: $("#pf_prise").value || "",
+        createdAt: serverTimestamp(),
+        createdBy: currentUser.pseudo,
+        nomPrenomKey: keyPatient($("#pf_nom").value, $("#pf_prenom").value)
+      };
+      try{
+        await addDoc(collection(db,"Fiche"), data);
+        await logMsg(currentUser.pseudo, `a créé une fiche pour ${data.nom} ${data.prenom}`);
+        overlayPatientForm.classList.remove("show");
+        e.target.reset(); $("#pf_age").value = "";
+      }catch(err){
+        $("#patientFormMsg").textContent = "Erreur: " + (err.message||err);
+      }
+    });
+
+    function openPatientStack(key){
+      const g = (currentUser?.data?.grade)||"new";
+      if (g==="new"){ alert("Accès refusé (grade new)."); return; }
+      const arr = (fichesByKey.get(key) || []).slice().sort((a,b)=> toMs(a.createdAt)-toMs(b.createdAt));
+      if (!arr.length) return;
+      let idx = arr.length - 1; // open last by default
+      function render(){
+        const f = arr[idx];
+        $("#stackInfo").textContent = `${key} — fiche ${idx+1} / ${arr.length} — ${fmtCreated(f.createdAt)}`;
+        const cont = $("#ficheView"); cont.innerHTML = "";
+        const grid = el("div", { style:"display:flex; gap:12px; flex-wrap:wrap" });
+        const field = (label, val) => `<div class="card" style="flex:1; min-width:220px"><div class="muted">${label}</div><div><strong>${val||"—"}</strong></div></div>`;
+        grid.innerHTML = [
+          field("Nom", f.nom), field("Prénom", f.prenom), field("Date de naissance", (typeof f.dateNaissance === "string"? f.dateNaissance : new Date(toMs(f.dateNaissance)).toISOString().slice(0,10))),
+          field("Âge", f.age), field("Sexe", f.sexe), field("Groupe sanguin", f.groupeSanguin),
+          field("Allergies", f.allergies), field("Taille (cm)", f.taille), field("Poids (kg)", f.poids),
+          field("Téléphone", f.telephone), field("Personnelles en charge", f.personnelles),
+          field("Nature de la blessure", f.nature), field("Type de blessure", f.type), field("Gravité", f.gravite),
+          field("IRM", f.irm), field("Scanner", f.scanner), field("Opération", f.operation), field("Soins", f.soins),
+          field("Type de prise en charge", f.prise), field("Créé par", f.createdBy)
+        ].join("");
+        cont.appendChild(grid);
+      }
+      $("#prevFiche").onclick = ()=>{ idx = Math.max(0, idx-1); render(); };
+      $("#nextFiche").onclick = ()=>{ idx = Math.min(arr.length-1, idx+1); render(); };
+      $("#closePatientStack").onclick = ()=> overlayPatientStack.classList.remove("show");
+      render();
+      overlayPatientStack.classList.add("show");
+    }
+
+    // --- Click on Grade KPI opens warnings for self (if not new)
+    gradeLabel.parentElement?.parentElement?.addEventListener?.("click", () => {
+      const g = (currentUser?.data?.grade)||"new";
+      if (g!=="new") openWarnings(currentUser.pseudo, g);
+    });
+
+    // --- Logs overlay close
+    $("#closeProfile").onclick = ()=> overlayProfile.classList.remove("show");
+  </script>
+</body>
+</html>
