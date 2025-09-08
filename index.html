@@ -1,0 +1,229 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Connexion</title>
+  <style>
+    :root { --bg:#2B2B3D; --panel:rgba(43,43,61,0.95); --muted:rgba(255,255,255,0.06); --text:#f5f5f7; --accent:#4f7cff; --danger:#e74c3c; --ok:#2ecc71; }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center}
+    .card{width:100%;max-width:420px;background:var(--panel);backdrop-filter:blur(12px);border-radius:20px;box-shadow:0 8px 30px rgba(0,0,0,.5);padding:24px}
+    .logo{display:block;margin:0 auto 12px auto;width:120px;height:auto;user-select:none;cursor:pointer}
+    h1{text-align:center;margin:6px 0 16px 0;font-size:1.25rem;opacity:.9}
+    label{display:block;margin-top:10px;font-weight:600}
+    input{width:100%;margin-top:6px;padding:12px;border-radius:12px;border:1px solid #4c4c62;background:#202030;color:var(--text);outline:none}
+    input::placeholder{opacity:.6}
+    button{width:100%;margin-top:14px;padding:12px;border:none;border-radius:12px;font-weight:800;cursor:pointer}
+    .btn{background:var(--accent);color:white}
+    .btn:disabled{opacity:.6;cursor:not-allowed}
+    .hint{font-size:.95rem;opacity:.85;margin-top:8px}
+    .error{color:#ffd2d2;background:rgba(231,76,60,.12);border:1px solid rgba(231,76,60,.4);padding:8px 10px;border-radius:10px;margin-top:10px;display:none}
+    .success{color:#d6ffe0;background:rgba(46,204,113,.12);border:1px solid rgba(46,204,113,.4);padding:8px 10px;border-radius:10px;margin-top:10px;display:none}
+    .hidden{display:none}
+    .overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(12px);display:none;align-items:center;justify-content:center;z-index:20}
+    .modal{width:94%;max-width:420px;background:var(--panel);border-radius:18px;box-shadow:0 10px 35px rgba(0,0,0,.55);padding:18px 18px 16px}
+    .modal h2{margin:0 0 12px;text-align:center}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <img src="Logo.png" alt="Logo" id="logo" class="logo" title="Clique 5× pour admin">
+    <h1>Connexion</h1>
+
+    <div id="stepPseudo">
+      <label for="pseudo">Pseudo</label>
+      <input id="pseudo" type="text" autocomplete="username" placeholder="Entrez votre pseudo">
+      <button id="btnPseudo" class="btn">Continuer</button>
+      <p class="hint">Tape ton pseudo et appuie sur Entrée.</p>
+      <div id="errBox" class="error"></div>
+    </div>
+
+    <div id="stepLogin" class="hidden">
+      <label for="password">Mot de passe</label>
+      <input id="password" type="password" autocomplete="current-password" placeholder="Mot de passe">
+      <button id="btnLogin" class="btn">Se connecter</button>
+      <div id="errLogin" class="error"></div>
+    </div>
+
+    <div id="stepRegister" class="hidden">
+      <label for="passwordNew">Créer un mot de passe</label>
+      <input id="passwordNew" type="password" autocomplete="new-password" placeholder="Min. 4 caractères">
+      <label for="passwordNew2">Confirmer le mot de passe</label>
+      <input id="passwordNew2" type="password" autocomplete="new-password" placeholder="Confirmez le mot de passe">
+      <button id="btnRegister" class="btn">Créer le compte</button>
+      <div id="errRegister" class="error"></div>
+    </div>
+
+    <div id="okBox" class="success"></div>
+  </div>
+
+  <!-- Admin modal -->
+  <div class="overlay" id="adminOverlay">
+    <div class="modal">
+      <h2>Connexion administrateur</h2>
+      <label for="adminPwd">Mot de passe admin</label>
+      <input id="adminPwd" type="password" placeholder="••••••••">
+      <button id="btnAdmin" class="btn">Entrer</button>
+      <div id="errAdmin" class="error"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
+    import { getFirestore, doc, getDoc, setDoc, addDoc, collection } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDMGMkmVgl8h0WuknCA-AChlyoX95RufNs",
+      authDomain: "base-de-donnee-b5c8c.firebaseapp.com",
+      projectId: "base-de-donnee-b5c8c",
+      storageBucket: "base-de-donnee-b5c8c.firebasestorage.app",
+      messagingSenderId: "302677536354",
+      appId: "1:302677536354:web:54e0d4562bad5f06c3ab3b"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db  = getFirestore(app);
+
+    const pseudoEl = document.getElementById('pseudo');
+    const btnPseudo = document.getElementById('btnPseudo');
+    const errBox = document.getElementById('errBox');
+    const stepPseudo = document.getElementById('stepPseudo');
+
+    const stepLogin = document.getElementById('stepLogin');
+    const pwdEl = document.getElementById('password');
+    const btnLogin = document.getElementById('btnLogin');
+    const errLogin = document.getElementById('errLogin');
+
+    const stepRegister = document.getElementById('stepRegister');
+    const pwdNew = document.getElementById('passwordNew');
+    const pwdNew2 = document.getElementById('passwordNew2');
+    const btnRegister = document.getElementById('btnRegister');
+    const errRegister = document.getElementById('errRegister');
+
+    const okBox = document.getElementById('okBox');
+
+    function show(el){ el.classList.remove('hidden'); }
+    function hide(el){ el.classList.add('hidden'); }
+    function alertErr(box, msg){ box.textContent = msg; box.style.display = 'block'; setTimeout(()=> box.style.display = 'none', 3000); }
+    function clearBoxes(){ [errBox, errLogin, errRegister].forEach(b=> b.style.display='none'); }
+
+    function isReservedPseudo(p){
+      const norm = (p||'').toLowerCase().replace(/[^a-z]/g,'');
+      return norm === 'admin';
+    }
+
+    let checkedPseudo = null;
+    async function handlePseudo(){
+      clearBoxes();
+      const p = (pseudoEl.value||'').trim();
+      if(!p){ alertErr(errBox, 'Pseudo requis'); return; }
+      if(isReservedPseudo(p)){ alertErr(errBox, 'Pseudo invalide'); return; }
+      const ref = doc(db, 'users', p);
+      const snap = await getDoc(ref);
+      checkedPseudo = p;
+      hide(stepPseudo);
+      if(snap.exists()){
+        show(stepLogin);
+        pwdEl.focus();
+      }else{
+        show(stepRegister);
+        pwdNew.focus();
+      }
+    }
+
+    async function doLogin(){
+      clearBoxes();
+      if(!checkedPseudo){ alertErr(errLogin,'Pseudo manquant'); return; }
+      const ref = doc(db, 'users', checkedPseudo);
+      const snap = await getDoc(ref);
+      if(!snap.exists()){ hide(stepLogin); show(stepRegister); return; }
+      const u = snap.data();
+      if((u.password||'') !== (pwdEl.value||'')){ alertErr(errLogin, 'Mot de passe incorrect'); return; }
+      const user = { pseudo: checkedPseudo, grade: u.grade || 'new' };
+      localStorage.setItem('currentUser', JSON.stringify(user));
+      okBox.textContent = 'Connexion réussie ✅'; okBox.style.display='block';
+      setTimeout(()=> window.location.href = 'dashboard.html', 450);
+    }
+
+    async function doRegister(){
+      clearBoxes();
+      if(!checkedPseudo){ alertErr(errRegister,'Pseudo manquant'); return; }
+      const pass1 = (pwdNew.value||'').trim();
+      const pass2 = (pwdNew2.value||'').trim();
+      if(pass1.length < 4){ alertErr(errRegister, 'Mot de passe trop court (min. 4)'); return; }
+      if(pass1 !== pass2){ alertErr(errRegister, 'Les mots de passe ne correspondent pas'); return; }
+      const ref = doc(db, 'users', checkedPseudo);
+      await setDoc(ref, {
+        password: pass1,
+        grade: 'new',
+        createdAt: new Date().toISOString(),
+        serviceActive: false,
+        totalHours: 0,
+        weeklyHours: 0
+      });
+      // Tenter de créer une notif dans la boîte aux lettres (ne bloque pas si échec)
+      try{
+        await addDoc(collection(db, 'mailbox'), {
+          type: 'new_user',
+          pseudo: checkedPseudo,
+          to: 'staff',
+          status: 'pending',
+          createdAt: new Date().toISOString()
+        });
+      }catch(e){
+        console.warn('Création de la notification mailbox échouée (non bloquant):', e);
+      }
+      const user = { pseudo: checkedPseudo, grade: 'new' };
+      localStorage.setItem('currentUser', JSON.stringify(user));
+      okBox.textContent = 'Compte créé ✅'; okBox.style.display='block';
+      setTimeout(()=> window.location.href = 'dashboard.html', 450);
+    }
+
+    btnPseudo.addEventListener('click', handlePseudo);
+    pseudoEl.addEventListener('keydown', e=>{ if(e.key==='Enter') handlePseudo(); });
+
+    btnLogin.addEventListener('click', doLogin);
+    pwdEl.addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+
+    btnRegister.addEventListener('click', doRegister);
+    pwdNew2.addEventListener('keydown', e=>{ if(e.key==='Enter') doRegister(); });
+
+    // Admin secret login
+    const logo = document.getElementById('logo');
+    const adminOverlay = document.getElementById('adminOverlay');
+    const btnAdmin = document.getElementById('btnAdmin');
+    const adminPwd = document.getElementById('adminPwd');
+    const errAdmin = document.getElementById('errAdmin');
+
+    let clicks = [];
+    logo.addEventListener('click', ()=>{
+      const now = Date.now();
+      clicks = clicks.filter(t => now - t < 10000);
+      clicks.push(now);
+      if(clicks.length >= 5){
+        adminOverlay.style.display = 'flex';
+        adminPwd.focus();
+        clicks = [];
+      }
+    });
+    btnAdmin.addEventListener('click', ()=>{
+      const pass = adminPwd.value || '';
+      if(pass !== 'St@dium17893Us'){ alertErr(errAdmin, 'Mot de passe admin incorrect'); return; }
+      localStorage.setItem('currentUser', JSON.stringify({ pseudo:'Admin', grade:'admin' }));
+      window.location.href = 'dashboard.html';
+    });
+    adminPwd.addEventListener('keydown', e=>{ if(e.key==='Enter') btnAdmin.click(); });
+    adminOverlay.addEventListener('click', e=>{ if(e.target === adminOverlay){ adminOverlay.style.display='none'; } });
+
+    // ESC to close admin overlay
+    document.addEventListener('keydown', (e)=>{
+      if(e.key === 'Escape'){
+        if(adminOverlay && adminOverlay.style.display && adminOverlay.style.display !== 'none'){
+          adminOverlay.style.display = 'none';
+        }
+      }
+    });
+  </script>
+</body>
+</html>
